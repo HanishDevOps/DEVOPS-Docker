@@ -1,0 +1,89 @@
+pipeline {
+    agent any
+    tools{
+        jdk 'jdk11'
+        maven 'maven3'
+    }
+
+
+    stages {
+        stage('Git Checkout') {
+            steps {
+                git branch: 'main', url: 'https://github.com/hanish1997/Ekart.git'
+            }
+        }
+        
+        stage('Compile') {
+            steps {
+                
+                sh 'mvn clean compile'
+            }
+        }
+        
+       
+        
+        stage('Build1') {
+            steps {
+                
+                sh 'mvn clean install'
+            }
+        }
+        
+        stage('Build2') {
+            steps {
+                
+                sh 'mvn clean package'
+            }
+        }
+        stage('OWASP Dependency Check'){
+            steps{
+                dependencyCheck additionalArguments: '--scan target/', odcInstallation: 'owasp'
+                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+            }
+        }
+        
+        // stage('Deploy artifact to Nexus'){
+        //     steps{
+        //         configFileProvider([configFile(fileId: '3bd523f3-5500-4715-9bd7-fc544a57a324', variable: 'mavensettings')]) {
+
+        //             sh "mvn -s $mavensettings clean deploy -DskipTests=true"
+        //         }
+        //     }
+        // }
+        
+        // stage('Deploy to Tomcat') {
+        //     steps {
+        //         sh "sudo cp target/*war /opt/apache-tomcat-9.0.65/webapps"
+        //     }
+        // }
+        stage('Build Docker image') {
+            steps {
+                script{
+                     withDockerRegistry(credentialsId: 'bb40822b-daba-4c55-bc21-5d57f74c14c5', toolName: 'docker') {
+                        sh "docker build -t shopping-cart -f docker/Dockerfile ."
+                        sh "docker tag shopping-cart hanish1997/shopping-cart1:latest"
+}
+                }
+            }
+        }
+        
+        stage('Run Docker Container') {
+            steps {
+                script{
+                     withDockerRegistry(credentialsId: 'bb40822b-daba-4c55-bc21-5d57f74c14c5', toolName: 'docker') {
+                       sh "docker run -d --name shopping -p 8070:8070 hanish1997/shopping-cart1:latest"
+}
+                }
+            }
+        }
+        stage('Deploy to DockerHub') {
+            steps {
+                script{
+                     withDockerRegistry(credentialsId: 'bb40822b-daba-4c55-bc21-5d57f74c14c5', toolName: 'docker') {
+                       sh "docker push hanish1997/shopping-cart1:latest"
+}
+                }
+            }
+        }
+    }
+}
